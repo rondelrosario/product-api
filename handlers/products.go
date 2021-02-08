@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"product-api/data"
@@ -66,6 +67,7 @@ func (p Products) MiddlewareValidateProduct(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		prod := data.Product{}
 
+		// Check if we can deserialize the input
 		err := prod.FromJSON(r.Body)
 		if err != nil {
 			p.l.Println("[ERROR] deserializing product", err)
@@ -73,9 +75,23 @@ func (p Products) MiddlewareValidateProduct(next http.Handler) http.Handler {
 			return
 		}
 
+		// validate the product
+		err = prod.Validate()
+		if err != nil {
+			p.l.Println("[ERROR] validating product", err)
+			http.Error(
+				rw,
+				fmt.Sprintf("Error validating product: %s", err),
+				http.StatusBadRequest)
+			return
+		}
+
+		// add the product to the context
 		ctx := context.WithValue(r.Context(), KeyProduct{}, prod)
 		req := r.WithContext(ctx)
 
+		// call the next handler, which can be another middleware in the chain
+		// or the final handler
 		next.ServeHTTP(rw, req)
 	})
 }
